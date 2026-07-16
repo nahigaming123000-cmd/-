@@ -1,0 +1,5 @@
+[tools]
+python = "3.11.0"
+
+[settings]
+python_github_attestations = false
