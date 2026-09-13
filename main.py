@@ -66,7 +66,7 @@ def keep_alive():
 # --- End Flask Keep Alive ---
 
 # --- Configuration ---
-TOKEN = os.environ.get('BOT_TOKEN', '8667323435:AAFsL06mA0SINVIBjvoKMnhq6CAF87Iy3Jk')
+TOKEN = os.environ.get('BOT_TOKEN', '8667323435:AAFG2GxQWpHRpk6qII_oAytasQpEZJdalnM')
 OWNER_ID = int(os.environ.get('OWNER_ID', '8216845222'))
 ADMIN_ID = int(os.environ.get('ADMIN_ID', '8216845222'))
 YOUR_USERNAME = os.environ.get('YOUR_USERNAME', '@imran789000')
