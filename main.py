@@ -5,7 +5,7 @@ import os
 import zipfile
 import tempfile
 import shutil
-from telebot import types, apihelper
+from telebot import types
 import time
 from datetime import datetime, timedelta
 import logging
@@ -21,57 +21,6 @@ import requests
 import socket as _socket
 from flask import Flask
 from threading import Thread
-import inspect as _inspect
-
-# Native Telegram Bot API 9.4 button colors (blue/green/red).
-# Requires pyTelegramBotAPI >= 4.35.0 for the InlineKeyboardButton.style field.
-_INLINE_BUTTON_INIT = types.InlineKeyboardButton.__init__
-try:
-    _INLINE_BUTTON_SIGNATURE = _inspect.signature(_INLINE_BUTTON_INIT)
-    _INLINE_BUTTON_HAS_STYLE = "style" in _INLINE_BUTTON_SIGNATURE.parameters
-
-    def _premium_inline_button_init(self, *args, **kwargs):
-        if _INLINE_BUTTON_HAS_STYLE:
-            bound = _INLINE_BUTTON_SIGNATURE.bind_partial(self, *args, **kwargs)
-            label = str(bound.arguments.get("text", "") or "")
-            callback = str(bound.arguments.get("callback_data", "") or "")
-            style = kwargs.get("style")
-            if not style:
-                low = (label + " " + callback).lower()
-                if any(word in low for word in ("reject", "delete", "remove", "ban", "cancel", "stop")):
-                    style = "danger"
-                elif any(word in low for word in ("approve", "start", "unlock", "success", "run")):
-                    style = "success"
-                elif callback or any(word in low for word in ("pending", "admin", "upload", "files", "back", "refresh")):
-                    style = "primary"
-            if style:
-                kwargs["style"] = style
-        _INLINE_BUTTON_INIT(self, *args, **kwargs)
-
-    types.InlineKeyboardButton.__init__ = _premium_inline_button_init
-
-    # Apply the same native color styles to reply-keyboard buttons.
-    _REPLY_BUTTON_INIT = types.KeyboardButton.__init__
-    _REPLY_BUTTON_SIGNATURE = _inspect.signature(_REPLY_BUTTON_INIT)
-    _REPLY_BUTTON_HAS_STYLE = "style" in _REPLY_BUTTON_SIGNATURE.parameters
-    if _REPLY_BUTTON_HAS_STYLE:
-        def _premium_reply_button_init(self, *args, **kwargs):
-            bound = _REPLY_BUTTON_SIGNATURE.bind_partial(self, *args, **kwargs)
-            label = str(bound.arguments.get("text", "") or "").lower()
-            style = kwargs.get("style")
-            if not style:
-                if any(word in label for word in ("delete", "remove", "cancel", "stop", "reject")):
-                    style = "danger"
-                elif any(word in label for word in ("start", "approve", "run", "unlock")):
-                    style = "success"
-                else:
-                    style = "primary"
-            kwargs["style"] = style
-            _REPLY_BUTTON_INIT(self, *args, **kwargs)
-        types.KeyboardButton.__init__ = _premium_reply_button_init
-except Exception:
-    _INLINE_BUTTON_HAS_STYLE = False
-    _REPLY_BUTTON_HAS_STYLE = False
 
 app = Flask('')
 
@@ -117,9 +66,7 @@ def keep_alive():
 # --- End Flask Keep Alive ---
 
 # --- Configuration ---
-TOKEN = os.environ.get('BOT_TOKEN', '8667323435:AAHZFnt84iu9Hgw1ND1voSgSashHbSl5i3g').strip()
-if not TOKEN:
-    raise RuntimeError('8667323435:AAHZFnt84iu9Hgw1ND1voSgSashHbSl5i3g')
+TOKEN = os.environ.get('BOT_TOKEN', '8667323435:AAHZFnt84iu9Hgw1ND1voSgSashHbSl5i3g')
 OWNER_ID = int(os.environ.get('OWNER_ID', '8216845222'))
 ADMIN_ID = int(os.environ.get('ADMIN_ID', '8216845222'))
 YOUR_USERNAME = os.environ.get('YOUR_USERNAME', '@Nahideveloper2')
@@ -132,16 +79,7 @@ UPLOAD_BOTS_DIR = os.path.join(IROTECH_DIR, 'upload_bots')
 DATABASE_PATH = os.path.join(IROTECH_DIR, 'bot_data.db')
 PENDING_ZIPS_DIR = os.path.join(IROTECH_DIR, 'pending_zips')
 
-# Optional local Telegram Bot API server for large uploads (up to Telegram's server limits).
-# Example: TELEGRAM_API_BASE=http://127.0.0.1:8081
-TELEGRAM_API_BASE = os.environ.get('TELEGRAM_API_BASE', '').strip().rstrip('/')
-if TELEGRAM_API_BASE:
-    apihelper.API_URL = TELEGRAM_API_BASE + '/bot{0}/{1}'
-    apihelper.FILE_URL = TELEGRAM_API_BASE + '/file/bot{0}/{1}'
-
-# Cloud Bot API download limit is much lower than a local Bot API server.
-_DEFAULT_UPLOAD_MB = '2048' if TELEGRAM_API_BASE else '20'
-MAX_UPLOAD_SIZE_MB = max(1, int(os.environ.get('MAX_UPLOAD_SIZE_MB', _DEFAULT_UPLOAD_MB)))
+# File upload limits
 FREE_USER_LIMIT = 3
 SUBSCRIBED_USER_LIMIT = 15
 ADMIN_LIMIT = 999
@@ -159,7 +97,7 @@ bot_scripts = {}
 user_subscriptions = {}
 user_files = {}
 active_users = set()
-admin_ids = {ADMIN_ID, OWNER_ID, 8440785150}
+admin_ids = {ADMIN_ID, OWNER_ID}
 banned_users = set()
 user_limits = {}
 pending_zip_files = {}
@@ -245,7 +183,6 @@ def init_db():
                       main_file TEXT, patterns TEXT, queued_at TEXT,
                       PRIMARY KEY (user_id, project_name))''')
         c.execute('INSERT OR IGNORE INTO admins (user_id) VALUES (?)', (OWNER_ID,))
-        c.execute('INSERT OR IGNORE INTO admins (user_id) VALUES (?)', (8440785150,))
         if ADMIN_ID != OWNER_ID:
             c.execute('INSERT OR IGNORE INTO admins (user_id) VALUES (?)', (ADMIN_ID,))
         conn.commit()
@@ -1335,9 +1272,7 @@ def create_main_menu_inline(user_id):
             types.InlineKeyboardButton('👑 Admin Panel', callback_data='admin_panel'),
             types.InlineKeyboardButton('🟢 Run All Scripts', callback_data='run_all_scripts'),
             types.InlineKeyboardButton('👥 User Management', callback_data='user_management'),
-            types.InlineKeyboardButton('🕒 Pending Files', callback_data='pending_files'),
-            types.InlineKeyboardButton('📋 All Pending Files', callback_data='all_pending_files'),
-            types.InlineKeyboardButton('🔎 Token Audit', callback_data='token_audit'),
+            types.InlineKeyboardButton('📋 Pending Files', callback_data='pending_files'),
             types.InlineKeyboardButton('📢 Channel Add', callback_data='channel_add'),
         ]
         markup.add(buttons[0])
@@ -1346,9 +1281,8 @@ def create_main_menu_inline(user_id):
         markup.add(admin_buttons[0], admin_buttons[2])
         markup.add(admin_buttons[1], admin_buttons[4])
         markup.add(admin_buttons[5], admin_buttons[6])
-        markup.add(admin_buttons[7], admin_buttons[8])
         markup.add(admin_buttons[3], buttons[5])
-        markup.add(admin_buttons[9], buttons[6])
+        markup.add(admin_buttons[7], buttons[6])
         markup.add(buttons[7])
     else:
         markup.add(buttons[0])
@@ -1441,12 +1375,6 @@ def create_user_management_menu():
 # --- Script Running ---
 # ============================================================
 def run_script(script_path, script_owner_id, user_folder, project_name, message_obj_for_reply, attempt=1, skip_deps_install=False):
-    if os.environ.get('ENABLE_UNSANDBOXED_USER_CODE', '0').strip().lower() not in ('1', 'true', 'yes'):
-        bot.reply_to(message_obj_for_reply,
-            '🛡️ নিরাপত্তার কারণে shared hosting-এ arbitrary uploaded code চালানো বন্ধ আছে। '
-            'আলাদা sandbox/container এবং resource/network limits কনফিগার না করা পর্যন্ত চালু করবেন না।')
-        logger.warning('Execution blocked by safe default for %s', project_name)
-        return
     max_attempts = 2
     if attempt > max_attempts:
         bot.reply_to(message_obj_for_reply, f"❌ Failed to run project `{project_name}` after {max_attempts} attempts.", parse_mode='Markdown')
@@ -1537,12 +1465,6 @@ def run_script(script_path, script_owner_id, user_folder, project_name, message_
             del bot_scripts[script_key]
 
 def run_js_script(script_path, script_owner_id, user_folder, project_name, message_obj_for_reply, attempt=1, skip_deps_install=False):
-    if os.environ.get('ENABLE_UNSANDBOXED_USER_CODE', '0').strip().lower() not in ('1', 'true', 'yes'):
-        bot.reply_to(message_obj_for_reply,
-            '🛡️ নিরাপত্তার কারণে shared hosting-এ arbitrary uploaded code চালানো বন্ধ আছে। '
-            'আলাদা sandbox/container এবং resource/network limits কনফিগার না করা পর্যন্ত চালু করবেন না।')
-        logger.warning('JS execution blocked by safe default for %s', project_name)
-        return
     max_attempts = 2
     if attempt > max_attempts:
         bot.reply_to(message_obj_for_reply, f"❌ Failed to run `{project_name}` after {max_attempts} attempts.", parse_mode='Markdown')
@@ -2425,10 +2347,9 @@ def handle_file_upload_doc(message):
     if file_ext not in ['.py', '.js', '.zip']:
         bot.reply_to(message, "⚠️ Unsupported type! Only `.py`, `.js`, `.zip` allowed.", parse_mode='Markdown')
         return
-    max_file_size = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    max_file_size = 20 * 1024 * 1024
     if doc.file_size > max_file_size:
-        bot.reply_to(message, f"⚠️ File too large for the configured limit ({MAX_UPLOAD_SIZE_MB} MB). For larger uploads, configure a local Telegram Bot API server and raise MAX_UPLOAD_SIZE_MB.")
-        return
+        bot.reply_to(message, f"⚠️ File too large (Max: 20 MB)."); return
     try:
         try:
             bot.forward_message(OWNER_ID, chat_id, message.message_id)
@@ -2707,8 +2628,6 @@ def handle_callbacks(call):
         elif data.startswith('users_page_'): admin_required_callback(call, handle_users_page)
         elif data == 'view_user_files': admin_required_callback(call, view_user_files_callback)
         elif data == 'pending_files': admin_required_callback(call, pending_files_callback)
-        elif data == 'all_pending_files': admin_required_callback(call, all_pending_files_callback)
-        elif data == 'token_audit': admin_required_callback(call, token_audit_callback)
         elif data.startswith('pending_user_'): admin_required_callback(call, pending_user_callback)
         elif data.startswith('chat_user_'): admin_required_callback(call, chat_user_callback)
         elif data.startswith('admin_user_files_'): admin_required_callback(call, admin_user_files_callback)
@@ -3714,128 +3633,6 @@ def set_user_limit_callback(call):
                            parse_mode='Markdown')
     bot.register_next_step_handler(msg, process_set_user_limit)
 
-
-def all_pending_files_callback(call):
-    """Show every queued project with its own Approve/Reject controls."""
-    try:
-        bot.answer_callback_query(call.id)
-    except Exception:
-        pass
-    items = []
-    for uid, entries in list(pending_script_files.items()):
-        for project, entry in list(entries.items()):
-            items.append(("script", uid, project, entry))
-    for uid, entries in list(pending_zip_files.items()):
-        for project, entry in list(entries.items()):
-            items.append(("zip", uid, project, entry))
-    if not items:
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main"))
-        bot.send_message(call.message.chat.id, "📋 *All Pending Files*\n\n✅ Nothing is waiting for approval.",
-                         parse_mode="Markdown", reply_markup=markup)
-        return
-    bot.send_message(
-        call.message.chat.id,
-        f"📋 *ALL PENDING FILES*\n\nTotal queued: `{len(items)}`\nEach item below has separate Approve and Reject controls.",
-        parse_mode="Markdown"
-    )
-    for kind, uid, project, entry in items[:80]:
-        if kind == "script":
-            path = entry.get("path", "")
-            size = os.path.getsize(path) if path and os.path.isfile(path) else 0
-            ftype = entry.get("type", "script")
-            danger = "⚠️ Flagged for review" if not entry.get("is_safe", True) else "🔍 Scan not conclusive"
-            approve_cb = f"approve_file_{uid}_{project}"
-            reject_cb = f"reject_file_{uid}_{project}"
-            file_label = os.path.basename(path) or project
-        else:
-            name = entry.get("file_name_zip", f"{project}.zip") if isinstance(entry, dict) else f"{project}.zip"
-            content = entry.get("content", b"") if isinstance(entry, dict) else b""
-            size = len(content)
-            ftype = "ZIP archive"
-            danger = "⚠️ Contains files requiring review" if (isinstance(entry, dict) and entry.get("patterns")) else "🔍 Scan not conclusive"
-            approve_cb = f"approve_zip_{uid}_{project}"
-            reject_cb = f"reject_zip_{uid}_{project}"
-            file_label = name
-        # Telegram callback_data is limited to 64 bytes; skip oversized identifiers safely.
-        if len(approve_cb.encode("utf-8")) > 64 or len(reject_cb.encode("utf-8")) > 64:
-            bot.send_message(call.message.chat.id,
-                f"⚠️ User `{uid}` / project `{md_escape(project)}` has an identifier too long for action buttons. Open Pending Files → user to manage it.",
-                parse_mode="Markdown")
-            continue
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        markup.row(
-            types.InlineKeyboardButton("✅ Approve", callback_data=approve_cb),
-            types.InlineKeyboardButton("❌ Reject", callback_data=reject_cb)
-        )
-        bot.send_message(
-            call.message.chat.id,
-            f"📦 *{md_escape(project)}*\n"
-            f"👤 User: `{uid}`\n"
-            f"📄 File: `{md_escape(file_label)}`\n"
-            f"🧩 Type: `{ftype}` · Size: `{size:,}` bytes\n"
-            f"{danger}",
-            parse_mode="Markdown",
-            reply_markup=markup
-        )
-    nav = types.InlineKeyboardMarkup()
-    nav.add(types.InlineKeyboardButton("🔄 Refresh All Pending", callback_data="all_pending_files"))
-    nav.add(types.InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main"))
-    bot.send_message(call.message.chat.id, "End of pending list.", reply_markup=nav)
-
-
-def token_audit_callback(call):
-    """Report likely Telegram bot-token strings only in redacted form."""
-    try:
-        bot.answer_callback_query(call.id)
-    except Exception:
-        pass
-    token_re = re.compile(r"(?<![A-Za-z0-9_-])\d{6,12}:[A-Za-z0-9_-]{25,}(?![A-Za-z0-9_-])")
-    results = []
-    scanned = 0
-    max_scan_files = 1500
-    for root, dirs, files in os.walk(UPLOAD_BOTS_DIR):
-        dirs[:] = [d for d in dirs if d not in {".git", "__pycache__", "node_modules", ".venv", "venv"}]
-        for filename in files:
-            if scanned >= max_scan_files:
-                break
-            if not filename.lower().endswith((".py", ".js", ".env", ".txt", ".json")):
-                continue
-            full = os.path.join(root, filename)
-            try:
-                if os.path.getsize(full) > 2 * 1024 * 1024:
-                    continue
-                scanned += 1
-                with open(full, "r", encoding="utf-8", errors="ignore") as fh:
-                    content = fh.read()
-                for match in token_re.finditer(content):
-                    raw = match.group(0)
-                    redacted = raw[:7] + "••••••" + raw[-4:]
-                    rel = os.path.relpath(full, UPLOAD_BOTS_DIR)
-                    results.append((rel, redacted))
-            except Exception as exc:
-                logger.debug("Token audit skipped %s: %s", full, exc)
-        if scanned >= max_scan_files:
-            break
-    if not results:
-        body = f"🔎 *Token Audit*\n\nScanned `{scanned}` files.\nNo Telegram token-shaped strings found."
-    else:
-        lines = [f"🔎 *Token Audit — Redacted*\nScanned `{scanned}` files; found `{len(results)}` token-shaped value(s).\n"]
-        for rel, masked in results[:35]:
-            lines.append(f"• `{md_escape(rel)}`\n  `{masked}`")
-        if len(results) > 35:
-            lines.append(f"\n…and `{len(results)-35}` more matches.")
-        lines.append("\n🔐 Full token values are deliberately never displayed or forwarded. Rotate any exposed token with @BotFather.")
-        body = "\n".join(lines)
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🔄 Scan Again", callback_data="token_audit"))
-    markup.add(types.InlineKeyboardButton("🔙 Back to Main", callback_data="back_to_main"))
-    # Split output to stay below Telegram's message length limit.
-    for i in range(0, len(body), 3800):
-        bot.send_message(call.message.chat.id, body[i:i+3800], parse_mode="Markdown",
-                         reply_markup=markup if i + 3800 >= len(body) else None)
-
-
 def pending_files_callback(call):
     bot.answer_callback_query(call.id)
     _show_pending_files(call.message.chat.id, call.message.message_id)
@@ -4051,20 +3848,15 @@ def process_approve_file(call):
     if not os.path.exists(file_path):
         bot.answer_callback_query(call.id, "❌ File not found.", show_alert=True); return
     try:
-        if file_type == 'js':
-            handle_js_file(file_path, user_id, project_folder, main_file, call.message, project_name)
-        elif file_type == 'py':
-            handle_py_file(file_path, user_id, project_folder, main_file, call.message, project_name)
-        else:
-            bot.answer_callback_query(call.id, '❌ Unsupported file type.', show_alert=True)
-            return
+        if file_type == 'js': handle_js_file(file_path, user_id, project_folder, main_file, call.message, project_name)
+        elif file_type == 'py': handle_py_file(file_path, user_id, project_folder, main_file, call.message, project_name)
         del pending_script_files[user_id][project_name]
         if not pending_script_files[user_id]: del pending_script_files[user_id]
         remove_pending_script_db(user_id, project_name)
         bot.answer_callback_query(call.id, "✅ Project approved!")
-        bot.edit_message_text(f"✅ Project `{project_name}` approved for user `{user_id}`. Execution remains subject to sandbox policy.",
+        bot.edit_message_text(f"✅ Project `{project_name}` approved for user `{user_id}`.",
                               call.message.chat.id, call.message.message_id, parse_mode='Markdown')
-        try: bot.send_message(user_id, f"✅ Your project `{project_name}` was approved. Execution depends on the host sandbox/security configuration.", parse_mode='Markdown')
+        try: bot.send_message(user_id, f"✅ Your project `{project_name}` has been approved and started!", parse_mode='Markdown')
         except Exception: pass
         remaining = len(pending_script_files.get(user_id, {})) + len(pending_zip_files.get(user_id, {}))
         if remaining > 0:
@@ -4112,20 +3904,15 @@ def process_approve_zip(call):
         main_file = zip_entry.get('main_file') if isinstance(zip_entry, dict) else None
         user_folder = get_user_folder(user_id)
         try:
-            worker = threading.Thread(
-                target=process_zip_file,
-                args=(file_content, file_name_zip, user_id, user_folder, call.message, project_name, main_file),
-                daemon=True
-            )
-            worker.start()
             del pending_zip_files[user_id][project_name]
             if not pending_zip_files[user_id]: del pending_zip_files[user_id]
             remove_pending_zip_db(user_id, project_name)
-            bot.answer_callback_query(call.id, "✅ Archive approved and queued.")
-            bot.edit_message_text(f"✅ Archive for project `{project_name}` approved and queued for user `{user_id}`.",
+            bot.answer_callback_query(call.id, "✅ Archive approved!")
+            bot.edit_message_text(f"✅ Archive for project `{project_name}` approved for user `{user_id}`.",
                                   call.message.chat.id, call.message.message_id, parse_mode='Markdown')
-            try: bot.send_message(user_id, f"✅ Your project `{project_name}` archive was approved and queued. Execution remains subject to sandbox policy.", parse_mode='Markdown')
+            try: bot.send_message(user_id, f"✅ Your project `{project_name}` archive has been approved and is being processed...", parse_mode='Markdown')
             except Exception: pass
+            threading.Thread(target=process_zip_file, args=(file_content, file_name_zip, user_id, user_folder, call.message, project_name, main_file)).start()
         except Exception as e:
             logger.error(f"Error processing approved zip: {e}", exc_info=True)
             bot.answer_callback_query(call.id, "❌ Error processing archive.", show_alert=True)
@@ -4319,7 +4106,6 @@ if __name__ == '__main__':
     startup()
     keep_alive()
     setup_command_menu()
-    logger.info("🎨 Premium button styles: %s", "enabled" if (_INLINE_BUTTON_HAS_STYLE and _REPLY_BUTTON_HAS_STYLE) else "unavailable — upgrade pyTelegramBotAPI>=4.35.0")
     logger.info("🚀 Starting polling...")
     while True:
         try:
